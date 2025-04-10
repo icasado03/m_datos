@@ -219,10 +219,11 @@ class EncodedKNNTransformer:
     
 class FlaggedImputerTransformer:
     """
-    Esta clase implementa una transformación novedosa:
-    - Imputación con mediana de variables numéricas que contengan missing.
-    - Creación de una variable indicadora (_missing_flag) para cada feature imputada.
-    - Transformación no lineal sobre la columna 'Area' (raíz cuadrada).
+    Transformación personalizada:
+    - Añade una nueva columna por cada feature con nulos, que indica si faltaba (1) o 
+        no (0) → se llama por ejemplo "Area_missing_flag".
+    - Rellena los nulos con la mediana guardada.
+    - Si existe la columna "Area": crea una nueva columna "sqrt_area" con su raíz cuadrada.
     """
 
     def __init__(self):
@@ -257,4 +258,42 @@ class FlaggedImputerTransformer:
             X["sqrt_area"] = np.sqrt(X["Area"])
 
         return X, y
+    
+class AdvancedCategoricalTransformer:
+    """
+    Este transformador:
+    - Agrupa categorías raras en 'Location' como 'Other'
+    - Crea una nueva feature 'Location_freq' (frecuencia de cada location)
+    - Hace target encoding sobre 'City' basado en Price
+    """
 
+    def __init__(self, rare_thresh=0.01):
+        self.rare_thresh = rare_thresh
+        self.city_price_map = {}
+        self.location_freq = {}
+
+    def fit(self, X, y):
+        # Agrupar categorías raras en Location
+        freq = X['Location'].value_counts(normalize=True)
+        self.rare_locations = freq[freq < self.rare_thresh].index
+        self.location_freq = X['Location'].value_counts()
+
+        # Calcular target encoding para City
+        self.city_price_map = y.groupby(X['city']).mean().to_dict()
+        return self
+
+    def transform(self, X, y=None):
+        X = X.copy()
+
+        # Agrupar locations raras
+        X['Location_grouped'] = X['Location'].apply(lambda loc: 'Other' if loc in self.rare_locations else loc)
+
+        # Codificar frecuencia de Location
+        X['Location_freq'] = X['Location'].map(self.location_freq)
+        X['Location_freq'] = X['Location_freq'].fillna(0)
+
+        # Codificar City con target encoding
+        X['City_encoded'] = X['city'].map(self.city_price_map)
+        X['City_encoded'] = X['City_encoded'].fillna(np.median(list(self.city_price_map.values())))
+
+        return X, y

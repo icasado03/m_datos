@@ -68,40 +68,24 @@ class SimpleFilter:
         
         return X_transformed, y_data
 
-class ZScoreOutlierFilter:
+class PriceOutlierFilter:
     """
-    Filtro de outliers basado en Z-Score.
-    Elimina filas donde alguna feature numérica tenga un z-score mayor que el umbral.
-
-    Parámetros:
-    - z_thresh: umbral de z-score (por defecto 3.0)
+    Filtro de outliers para el target (Price), basado en percentiles.
+    
+    Por defecto, elimina el 1% más bajo y el 1% más alto.
     """
 
-    def __init__(self, z_thresh=3.0):
-        self.z_thresh = z_thresh  # Umbral de corte para considerar un outlier
+    def __init__(self, lower_pct=0.1, upper_pct=0.85):
+        self.lower_pct = lower_pct
+        self.upper_pct = upper_pct
+        self.lower_bound = None
+        self.upper_bound = None
 
-    def fit(self, X_data, y_data=None):
+    def fit(self, X_data, y_data):
+        self.lower_bound = y_data.quantile(self.lower_pct)
+        self.upper_bound = y_data.quantile(self.upper_pct)
         return self
 
-    def transform(self, X_data, y_data=None):
-        # Seleccionar solo columnas numéricas
-        numeric_cols = X_data.select_dtypes(include=[np.number]).columns
-
-        # Calcular z-score absoluto para cada celda numérica
-        z_scores = np.abs(stats.zscore(X_data[numeric_cols], nan_policy='omit'))
-
-        # Crear máscara de filas sin outliers en ninguna variable
-        mask = (z_scores < self.z_thresh).all(axis=1)
-
-        # Filtrar X e Y según esa máscara
-        X_filtered = X_data[mask]
-        if y_data is not None:
-            # Comprobar si y_data es Series o ndarray
-            if hasattr(y_data, "loc"):
-                y_filtered = y_data.loc[mask]
-            else:
-                y_filtered = y_data[mask]
-        else:
-            y_filtered = None
-
-        return X_filtered, y_filtered
+    def transform(self, X_data, y_data):
+        mask = (y_data >= self.lower_bound) & (y_data <= self.upper_bound)
+        return X_data[mask], y_data[mask]
